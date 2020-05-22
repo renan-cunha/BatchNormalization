@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, List
 from layers import LinearLayer, SigmoidLayer, CrossEntropyLoss
 import pandas as pd
+from tqdm import tqdm
 
 
 class NeuralNetwork:
@@ -30,13 +31,28 @@ class NeuralNetwork:
                 self.layers[layer_index].weights -= learning_rate*layer.grad_weights
                 self.layers[layer_index].biases -= learning_rate*layer.grad_biases
 
+    def evaluate_model(self, test_x: np.ndarray, 
+                       test_y: np.ndarray) -> Tuple[float, float]:
+        """Returns loss and accuracy in the test set"""
+        self.loss_layer = CrossEntropyLoss(test_y)
+        y_pred = self.predict(test_x)
+        y_pred_labels = np.argmax(y_pred, axis=1)
+        y_labels = np.argmax(test_y, axis=1)
+        loss = self.loss_layer.forward(y_pred)
+        accuracy = np.sum(y_labels == y_pred_labels) / test_x.shape[0]
+        return np.mean(loss), accuracy
+
     def fit(self, x: np.ndarray, y: np.ndarray,
-            learning_rate: float, training_iters: int,
-            batch_size: int) -> np.array:
+            learning_rate: float, steps: int,
+            batch_size: int, test_x: np.ndarray, 
+            test_y: np.ndarray) -> np.array:
+        
         num_examples = x.shape[0]
-        losses = np.empty(training_iters)
+        losses = np.empty(steps)
         random_index = np.linspace(0, num_examples-1, num_examples).astype(int)
-        for i in range(training_iters):
+        step = 0
+        pbar = tqdm(total=steps)
+        while step < steps:
             np.random.shuffle(random_index)
             x = x[random_index]
             y = y[random_index]
@@ -48,19 +64,14 @@ class NeuralNetwork:
                 self.loss_layer.forward(y_pred)
                 self.backward_propagation(y_pred)
                 self.update_params(learning_rate)
-                   
-            self.loss_layer = CrossEntropyLoss(y)
-            y_pred = self.predict(x)
-            y_pred_labels = np.argmax(y_pred, axis=1)
-            y_labels = np.argmax(y, axis=1)
-
-            accuracy = np.sum(y_labels == y_pred_labels) / num_examples
-
-            error = self.loss_layer.forward(y_pred)
-            mean_error = np.mean(error)
-
-            print(f"EPOCH {i}")
-            print(f"Error: {mean_error} | Accuracy: {accuracy}")
+                step += 1
+                pbar.update(1)
+                if step > steps:
+                    break
+            
+            loss, accuracy = self.evaluate_model(test_x, test_y)
+            print(f"Step {step}")
+            print(f"Loss: {loss} | Accuracy: {accuracy}")                   
 
         return losses
 
@@ -71,24 +82,22 @@ class NeuralNetwork:
 
 
 if __name__ == "__main__":
-    csv = pd.read_csv("../mnist-in-csv/mnist_train.csv")
-    end_index = 60000
-    X = csv.values[:end_index, 1:].astype("float64")
-    X /= 255
-    y = csv.values[:end_index, 0]
-    y_one_hot = np.zeros((y.size, y.max()+1))
-    y_one_hot[np.arange(y.size), y] = 1
-    y_one_hot = y_one_hot.astype("float64")
+    
+    
+    def pre_process_data(location: str) -> Tuple[np.ndarray, np.ndarray]:
+        csv_train = pd.read_csv(location)
+        X = csv_train.values[:, 1:].astype("float32")
+        X /= 255
+        y = csv_train.values[:, 0]
+        y_one_hot = np.zeros((y.size, y.max()+1))
+        y_one_hot[np.arange(y.size), y] = 1
+        y_one_hot = y_one_hot.astype("float32")
+        return X, y_one_hot
+
+    x_train, y_train = pre_process_data("../mnist-in-csv/mnist_train.csv")
+    x_test, y_test = pre_process_data("../mnist-in-csv/mnist_test.csv")
     
     model = NeuralNetwork([784, 100, 100, 100, 10])
-    model.fit(X, y_one_hot, training_iters=50, learning_rate=0.001, batch_size=60)
-    csv = pd.read_csv("../mnist-in-csv/mnist_test.csv")
-    X = csv.values[:, 1:].astype("float64")
-    X /= 255
-    y = csv.values[:, 0]
-    y_one_hot = np.zeros((y.size, y.max()+1))
-    y_one_hot[np.arange(y.size), y] = 1
-    y_one_hot = y_one_hot.astype("float64")
-
-    print(np.sum(np.argmax(model.predict(X), axis=1) == y)/10000)
+    model.fit(x_train, y_train, steps=50000, learning_rate=0.01, 
+              batch_size=60, test_x=x_test, test_y=y_test)
 

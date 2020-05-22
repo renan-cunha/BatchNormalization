@@ -5,8 +5,8 @@ from typing import Tuple
 class LinearLayer:
 
     def __init__(self, shape: Tuple[int, int]):
-        self.weights = np.random.randn(shape[0], shape[1])
-        self.biases = np.random.randn(shape[1], 1)
+        self.weights = np.random.randn(shape[0], shape[1]).astype("float32")
+        self.biases = np.random.randn(shape[1], 1).astype("float32")
 
     def forward(self, x: np.ndarray):
         self.x = x
@@ -47,7 +47,7 @@ class SoftmaxLayer:
 class CrossEntropyLoss:
 
     def __init__(self, y: np.ndarray):
-        self.epsilon = 10**-15
+        self.epsilon = 10**-7
         self.y = np.clip(y, self.epsilon, 1.0-self.epsilon)
 
     def forward(self, x: np.ndarray) -> np.ndarray:
