@@ -107,8 +107,10 @@ class BatchNormLayer(ParamLayer):
         stddev_inv = 1/(self.stddev_x)
         aux_x_minus_mean = 2*(self.x_minus_mean)/self.x.shape[0]
 
-        mean_grad = (standard_grad @ (-1*stddev_inv.T) +
-                    var_grad * np.mean(aux_x_minus_mean, axis=0, keepdims=True))
+        mean_grad = (np.sum(standard_grad * (-1*stddev_inv), axis=0, 
+                            keepdims=True) +
+                            var_grad * np.sum(-1*aux_x_minus_mean, axis=0,
+                            keepdims=True))
         
 
         self.gamma_grad = np.sum(input_grads * self.standard_x, axis=0, 
