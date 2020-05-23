@@ -3,20 +3,16 @@ from typing import List
 from sklearn.metrics import mean_squared_error
 from abc import ABC, abstractmethod
 from typing import Tuple, List
-from layers import LinearLayer, SigmoidLayer, CrossEntropyLoss
+from src.feed_forward.layers import LinearLayer, SigmoidLayer, CrossEntropyLoss, ParamLayer, Layer, BatchNormLayer
 import pandas as pd
 from tqdm import tqdm
+import math
 
 
 class NeuralNetwork:
 
-    def __init__(self, num_neurons: List[int]):
-        self.layers = []
-        for index, neuron in enumerate(num_neurons[:-1]):
-            layer = LinearLayer((neuron, num_neurons[index+1]))
-            self.layers.append(layer)
-            layer = SigmoidLayer()
-            self.layers.append(layer)
+    def __init__(self, layers: List[Layer]):
+        self.layers = layers[:]
         self.loss_layer = None
     
     def backward_propagation(self, output: np.ndarray) -> None:
@@ -27,9 +23,8 @@ class NeuralNetwork:
     def update_params(self, learning_rate: float) -> None:
         for layer_index in range(len(self.layers)):
             layer = self.layers[layer_index]
-            if type(layer) == LinearLayer:
-                self.layers[layer_index].weights -= learning_rate*layer.grad_weights
-                self.layers[layer_index].biases -= learning_rate*layer.grad_biases
+            if isinstance(layer, ParamLayer):
+                layer.apply_gradients(learning_rate)
 
     def evaluate_model(self, test_x: np.ndarray, 
                        test_y: np.ndarray) -> Tuple[float, float]:
@@ -48,10 +43,12 @@ class NeuralNetwork:
             test_y: np.ndarray) -> np.array:
         
         num_examples = x.shape[0]
-        losses = np.empty(steps)
+        num_batches = math.ceil(num_examples / batch_size)
+        metrics = np.zeros((11, 2))
         random_index = np.linspace(0, num_examples-1, num_examples).astype(int)
         step = 0
         pbar = tqdm(total=steps)
+        metrics_index = 0
         while step < steps:
             np.random.shuffle(random_index)
             x = x[random_index]
@@ -64,16 +61,19 @@ class NeuralNetwork:
                 self.loss_layer.forward(y_pred)
                 self.backward_propagation(y_pred)
                 self.update_params(learning_rate)
+
                 step += 1
                 pbar.update(1)
                 if step > steps:
                     break
             
-            loss, accuracy = self.evaluate_model(test_x, test_y)
+            loss, accuracy = self.evaluate_model(x, y)
+            metrics[metrics_index, :] = loss, accuracy
+            metrics_index += 1
             print(f"Step {step}")
             print(f"Loss: {loss} | Accuracy: {accuracy}")                   
 
-        return losses
+        return metrics
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         for layer in self.layers:
@@ -97,7 +97,13 @@ if __name__ == "__main__":
     x_train, y_train = pre_process_data("../mnist-in-csv/mnist_train.csv")
     x_test, y_test = pre_process_data("../mnist-in-csv/mnist_test.csv")
     
-    model = NeuralNetwork([784, 100, 100, 100, 10])
-    model.fit(x_train, y_train, steps=50000, learning_rate=0.01, 
+    model = NeuralNetwork([LinearLayer((784, 100)), BatchNormLayer(100),
+                           SigmoidLayer(),
+                           LinearLayer((100, 100)), BatchNormLayer(100),
+                           SigmoidLayer(),
+                           LinearLayer((100, 100)), BatchNormLayer(100),
+                           SigmoidLayer(),
+                           LinearLayer((100, 10)),  SigmoidLayer()])
+    model.fit(x_train, y_train, steps=50000, learning_rate=0.03, 
               batch_size=60, test_x=x_test, test_y=y_test)
 
