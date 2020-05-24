@@ -13,7 +13,7 @@ class NeuralNetwork:
 
     def __init__(self, layers: List[Layer]):
         self.layers = layers[:]
-        self.loss_layer = None
+        self.loss_layer: Layer
     
     def backward_propagation(self, output: np.ndarray) -> None:
         grad_input = self.loss_layer.backward(np.ones_like(output)) 
@@ -27,15 +27,16 @@ class NeuralNetwork:
                 layer.apply_gradients(learning_rate)
 
     def evaluate_model(self, test_x: np.ndarray, 
-                       test_y: np.ndarray) -> Tuple[float, float]:
+                       test_y: np.ndarray,
+                       x_train: np.ndarray) -> Tuple[float, float]:
         """Returns loss and accuracy in the test set"""
         self.loss_layer = CrossEntropyLoss(test_y)
-        y_pred = self.predict(test_x)
+        y_pred = self.predict(test_x, x_train=x_train)
         y_pred_labels = np.argmax(y_pred, axis=1)
         y_labels = np.argmax(test_y, axis=1)
         loss = self.loss_layer.forward(y_pred)
         accuracy = np.sum(y_labels == y_pred_labels) / test_x.shape[0]
-        return np.mean(loss), accuracy
+        return float(np.mean(loss)), accuracy
 
     def fit(self, x: np.ndarray, y: np.ndarray,
             learning_rate: float, steps: int,
@@ -43,8 +44,8 @@ class NeuralNetwork:
             test_y: np.ndarray) -> np.array:
         
         num_examples = x.shape[0]
-        num_batches = math.ceil(num_examples / batch_size)
-        metrics = np.zeros((11, 2))
+        num_batches = math.ceil(num_examples/batch_size)
+        metrics = np.zeros((steps//num_batches, 2))
         random_index = np.linspace(0, num_examples-1, num_examples).astype(int)
         step = 0
         pbar = tqdm(total=steps)
@@ -57,7 +58,7 @@ class NeuralNetwork:
                 mini_batch_x = x[index_batch: index_batch + batch_size]
                 mini_batch_y = y[index_batch: index_batch + batch_size]
                 self.loss_layer = CrossEntropyLoss(mini_batch_y)
-                y_pred = self.predict(mini_batch_x)
+                y_pred = self.predict(mini_batch_x, test=False)
                 self.loss_layer.forward(y_pred)
                 self.backward_propagation(y_pred)
                 self.update_params(learning_rate)
@@ -67,7 +68,7 @@ class NeuralNetwork:
                 if step > steps:
                     break
             
-            loss, accuracy = self.evaluate_model(x, y)
+            loss, accuracy = self.evaluate_model(test_x, test_y, x)
             metrics[metrics_index, :] = loss, accuracy
             metrics_index += 1
             print(f"Step {step}")
@@ -75,35 +76,16 @@ class NeuralNetwork:
 
         return metrics
 
-    def predict(self, x: np.ndarray) -> np.ndarray:
+    def predict(self, x_test: np.ndarray, test: bool = True,
+                x_train:np.ndarray = None) -> np.ndarray:
+        if test:
+            for layer in self.layers:
+                if type(layer) == BatchNormLayer:
+                    layer.set_variables(x_train)
+                x_train = layer.forward(x_train, predict=test)
+
         for layer in self.layers:
-            x = layer.forward(x)
-        return x
+            x_test = layer.forward(x_test, predict=test)
+        return x_test
 
-
-if __name__ == "__main__":
-    
-    
-    def pre_process_data(location: str) -> Tuple[np.ndarray, np.ndarray]:
-        csv_train = pd.read_csv(location)
-        X = csv_train.values[:, 1:].astype("float32")
-        X /= 255
-        y = csv_train.values[:, 0]
-        y_one_hot = np.zeros((y.size, y.max()+1))
-        y_one_hot[np.arange(y.size), y] = 1
-        y_one_hot = y_one_hot.astype("float32")
-        return X, y_one_hot
-
-    x_train, y_train = pre_process_data("../mnist-in-csv/mnist_train.csv")
-    x_test, y_test = pre_process_data("../mnist-in-csv/mnist_test.csv")
-    
-    model = NeuralNetwork([LinearLayer((784, 100)), BatchNormLayer(100),
-                           SigmoidLayer(),
-                           LinearLayer((100, 100)), BatchNormLayer(100),
-                           SigmoidLayer(),
-                           LinearLayer((100, 100)), BatchNormLayer(100),
-                           SigmoidLayer(),
-                           LinearLayer((100, 10)),  SigmoidLayer()])
-    model.fit(x_train, y_train, steps=50000, learning_rate=0.03, 
-              batch_size=60, test_x=x_test, test_y=y_test)
 
