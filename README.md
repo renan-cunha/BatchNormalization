@@ -20,16 +20,20 @@ Batch Normalization provides stability to the inputs of the activation functions
 By doing that, it reduces the number of steps needed to train a model. 
 
 ### Forward Pass
-
-![forward_pass_batch_norm](docs/bn_forward.png)
+<p align="center">
+  <img src="docs/bn_forward.png" width="600">
+  </p>
 
 ### Backward Pass
+<p align="center">
+  <img src="docs/bn_backward.png">
+  </p>
 
-![backward_pass_batch_norm](docs/bn_backward.png)
 
 ## Results
-
-![mnist_results](docs/results.png)
+<p align="center">
+  <img src="docs/results.png">
+  </p>
 
 ## Reproduce
 
