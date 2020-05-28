@@ -1,6 +1,6 @@
 import numpy as np
-from typing import Tuple, List
-from src.feed_forward.layers import CrossEntropyLoss, ParamLayer, Layer, BatchNormLayer
+from typing import Tuple, List, Union
+from src.feed_forward.layers import CrossEntropyLoss, ParamLayer, Layer
 from tqdm import tqdm
 import math
 
@@ -9,7 +9,7 @@ class NeuralNetwork:
 
     def __init__(self, layers: List[Layer]):
         self.layers = layers[:]
-        self.loss_layer: Layer
+        self.loss_layer: Union[Layer, None] = None
     
     def backward_propagation(self, output: np.ndarray) -> None:
         grad_input = self.loss_layer.backward(np.ones_like(output)) 
@@ -23,11 +23,10 @@ class NeuralNetwork:
                 layer.apply_gradients(learning_rate)
 
     def evaluate_model(self, test_x: np.ndarray, 
-                       test_y: np.ndarray,
-                       x_train: np.ndarray) -> Tuple[float, float]:
+                       test_y: np.ndarray) -> Tuple[float, float]:
         """Returns loss and accuracy in the test set"""
         self.loss_layer = CrossEntropyLoss(test_y)
-        y_pred = self.predict(test_x, x_train=x_train)
+        y_pred = self.predict(test_x)
         y_pred_labels = np.argmax(y_pred, axis=1)
         y_labels = np.argmax(test_y, axis=1)
         loss = self.loss_layer.forward(y_pred)
@@ -51,28 +50,19 @@ class NeuralNetwork:
                 mini_batch_x = x_train[index_batch: index_batch + batch_size]
                 mini_batch_y = y_train[index_batch: index_batch + batch_size]
                 self.loss_layer = CrossEntropyLoss(mini_batch_y)
-                y_pred = self.predict(mini_batch_x, test=False)
+                y_pred = self.predict(mini_batch_x, train=True)
                 self.loss_layer.forward(y_pred)
                 self.backward_propagation(y_pred)
                 self.update_params(learning_rate)
 
-            loss, accuracy = self.evaluate_model(x_test, y_test, x_train)
+            loss, accuracy = self.evaluate_model(x_test, y_test)
             metrics[epoch, :] = loss, accuracy
-            print(f"Epoch {epoch}")
-            print(f"Loss: {loss} | Accuracy: {accuracy}")                   
 
         return metrics
 
-    def predict(self, x_test: np.ndarray, test: bool = True,
-                x_train:np.ndarray = None) -> np.ndarray:
-        if test:
-            for layer in self.layers:
-                if type(layer) == BatchNormLayer:
-                    layer.set_variables(x_train)
-                x_train = layer.forward(x_train, predict=test)
-
+    def predict(self, x_test: np.ndarray, train: bool = False) -> np.ndarray:
         for layer in self.layers:
-            x_test = layer.forward(x_test, predict=test)
+            x_test = layer.forward(x_test, train=train)
         return x_test
 
 
