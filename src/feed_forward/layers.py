@@ -75,11 +75,12 @@ class SoftmaxLayer(Layer):
         self.next_x = np.zeros(0)
 
     def forward(self, x: np.ndarray, train: bool = True) -> np.ndarray:
-        self.next_x = x / np.sum(x, axis=1, keepdims=True)
+        self.next_x = np.exp(x) / np.sum(np.exp(x) + 0.0001, axis=1, keepdims=True)
         return self.next_x
 
     def backward(self, grad_input: np.ndarray) -> np.ndarray:
-        return grad_input * (self.next_x * (1 - self.next_x))
+        softmax = self.next_x.reshape(-1,1)
+        return grad_input * (np.diagflat(softmax) - np.dot(softmax, softmax.T))
 
 
 class CrossEntropyLoss(Layer):
